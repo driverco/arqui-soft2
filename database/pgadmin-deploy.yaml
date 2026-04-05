@@ -29,7 +29,47 @@ spec:
           ports:
             - containerPort: 80
               name: pgadminport
+          volumeMounts:
+          - mountPath: /var/lib
+            name: pgadmin-storage
+      volumes:
+        - name: pgadmin-storage
+          persistentVolumeClaim:
+            claimName: pgadmin-pv-claim
 ---
+    kind: PersistentVolume
+    apiVersion: v1
+    metadata:
+      name: pgadmin-pv-volume
+      labels:
+        type: local
+        app: pgadmin
+    spec:
+      storageClassName: standard
+      capacity:
+        storage: 5Gi
+      accessModes:
+        - ReadWriteMany
+      hostPath:
+        path: "/mnt/data/pgadmin"
+---
+    kind: PersistentVolumeClaim
+    apiVersion: v1
+    metadata:
+      name: pgadmin-pv-claim
+      labels:
+        app: pgadmin
+    spec:
+      storageClassName: standard
+      volumeName: pgadmin-pv-volume
+      accessModes:
+        - ReadWriteMany
+      resources:
+        requests:
+          storage: 5Gi
+---
+
+
 apiVersion: v1
 kind: Service
 metadata:

@@ -13,14 +13,8 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from passlib.context import CryptContext
 import hashlib
-
-# Configuración del JWT
-SECRET_KEY = "mi_llave_secreta_muy_segura"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-# Configuración de la base de datos PostgreSQL
-DATABASE_URL = "postgresql://admin:DevTeam+1379@localhost:5432/orders"  # Replace with your credentials
+import socket
+import os
 
 # Contexto para hashing de contraseñas
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -37,21 +31,25 @@ class TokenData(BaseModel):
     role: str
 
 def get_db_connection():
-    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    return psycopg2.connect(os.getenv("DATABASE_URL"), cursor_factory=RealDictCursor)
 
-def log_audit(username, method, endpoint, user_agent, ip):
+def get_request_info(request: Request):
+    """Extract client IP and pod hostname from request"""
+    return (request.client.host, os.getenv("HOSTNAME"))
+
+def log_audit(username, method, endpoint, user_agent, ip, pod):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO audit_logs (user_id, method, endpoint, timestamp, user_agent, ip) "
-            "VALUES ((select user_id from users where username = %s), %s, %s, now(), %s, %s)",
-            (username, method, endpoint, user_agent, ip),
+            "INSERT INTO audit_logs (user_id, method, endpoint, timestamp, user_agent, ip, pod) "
+            "VALUES ((select user_id from users where username = %s), %s, %s, now(), %s, %s, %s)",
+            (username, method, endpoint, user_agent, ip, pod),
         )
         conn.commit()
         cursor.close()
         conn.close()
-        logger.info(f"Audit log: user={username}, method={method}, endpoint={endpoint}, user_agent={user_agent}, ip={ip}")
+        logger.info(f"Audit log: user={username}, method={method}, endpoint={endpoint}, user_agent={user_agent}, ip={ip}, pod={pod}")
     except psycopg2.Error as e:
         logger.error(f"Database error in audit log: {str(e)}")
     except Exception as e:
@@ -63,9 +61,9 @@ def verify_password(plain_password, hashed_password):
 
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.utcnow() + timedelta(minutes=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES")))
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, os.getenv("SECRET_KEY"), algorithm=os.getenv("ALGORITHM"))
 
 def is_token_blacklisted(token: str) -> bool:
     token_hash = hashlib.sha256(token.encode()).hexdigest()
@@ -79,7 +77,7 @@ def is_token_blacklisted(token: str) -> bool:
 
 def blacklist_token(token: str):
     token_hash = hashlib.sha256(token.encode()).hexdigest()
-    expires_at = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expires_at = datetime.utcnow() + timedelta(minutes=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES")))
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("INSERT INTO token_blacklist (token_hash, expires_at) VALUES (%s, %s) ON CONFLICT (token_hash) DO NOTHING", (token_hash, expires_at))
@@ -91,7 +89,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     if is_token_blacklisted(token):
         raise HTTPException(status_code=401, detail="Token inválido o expirado")
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=[os.getenv("ALGORITHM")])
         username: str = payload.get("sub")
         role: str = payload.get("role")
         if username is None:
@@ -117,7 +115,7 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
     conn.close()
     
     if not user or not verify_password(form_data.password, user["password"]):
-        log_audit(form_data.username, request.method, request.url.path, request.headers.get("user-agent", "none"), request.client.host)
+        log_audit(form_data.username, request.method, request.url.path, request.headers.get("user-agent", "none"), *get_request_info(request))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario o contraseña incorrectos",
@@ -125,18 +123,18 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
         )
     
     access_token = create_access_token(data={"sub": user["username"], "role": user["role"]})
-    log_audit(user["username"], request.method, request.url.path, request.headers.get("user-agent", "none"), request.client.host)
+    log_audit(user["username"], request.method, request.url.path, request.headers.get("user-agent", "none"), *get_request_info(request))
     return {"access_token": access_token, "token_type": "bearer"}
 
 
 @app.get("/validate")
 async def validate(request: Request, current_user: TokenData = Depends(require_role("user", "admin", "supervisor"))):
     try:
-        log_audit(current_user.username, request.method, request.url.path, request.headers.get("user-agent", "none"), request.client.host)
+        log_audit(current_user.username, request.method, request.url.path, request.headers.get("user-agent", "none"), *get_request_info(request))
         return {"username": current_user.username, "role": current_user.role}
     except HTTPException as e:
         if e.status_code == 403:
-            log_audit(current_user.username, request.method, request.url.path, request.headers.get("user-agent", "none"), request.client.host)
+            log_audit(current_user.username, request.method, request.url.path, request.headers.get("user-agent", "none"), *get_request_info(request))
             raise HTTPException(status_code=403, detail="Acceso denegado: Rol invalido")
         raise
 
@@ -146,13 +144,13 @@ async def read_users_me(request: Request, token: str = Depends(oauth2_scheme)):
     if is_token_blacklisted(token):
         raise HTTPException(status_code=401, detail="Token inválido o expirado")
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=[os.getenv("ALGORITHM")])
         username: str = payload.get("sub")
         if username is None:
-            log_audit(None, request.method, request.url.path, request.headers.get("user-agent", "none"), request.client.host)
+            log_audit(None, request.method, request.url.path, request.headers.get("user-agent", "none"), *get_request_info(request))
             raise HTTPException(status_code=401, detail="Token inválido")
     except jwt.PyJWTError:
-        log_audit(None, request.method, request.url.path, request.headers.get("user-agent", "none"), request.client.host)
+        log_audit(None, request.method, request.url.path, request.headers.get("user-agent", "none"), *get_request_info(request))
         raise HTTPException(status_code=401, detail="Token inválido o expirado")
         
     conn = get_db_connection()
@@ -163,23 +161,23 @@ async def read_users_me(request: Request, token: str = Depends(oauth2_scheme)):
     conn.close()
     
     if not user:
-        log_audit(username, request.method, request.url.path, request.headers.get("user-agent", "none"), request.client.host)
+        log_audit(username, request.method, request.url.path, request.headers.get("user-agent", "none"), *get_request_info(request))
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     
-    log_audit(username, request.method, request.url.path, request.headers.get("user-agent", "none"), request.client.host)
+    log_audit(username, request.method, request.url.path, request.headers.get("user-agent", "none"), *get_request_info(request))
     return {"username": user["username"], "full_name": user["full_name"]}
 
 @app.post("/logout")
 async def logout(request: Request, token: str = Depends(oauth2_scheme), current_user: TokenData = Depends(get_current_user)):
     blacklist_token(token)
-    log_audit(current_user.username, request.method, request.url.path, request.headers.get("user-agent", "none"), request.client.host)
+    log_audit(current_user.username, request.method, request.url.path, request.headers.get("user-agent", "none"), *get_request_info(request))
     return {"message": f"Usuario {current_user.username} ha cerrado sesión exitosamente"}
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
     if is_token_blacklisted(token):
         raise HTTPException(status_code=401, detail="Token inválido o expirado")
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=[os.getenv("ALGORITHM")])
         username: str = payload.get("sub")
         role: str = payload.get("role")
         if username is None:
@@ -198,3 +196,4 @@ def require_role(*allowed_roles):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+

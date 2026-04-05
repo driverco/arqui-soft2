@@ -16,10 +16,10 @@ import httpx
 app = FastAPI()
 
 # Database connection
-DATABASE_URL = "postgresql://admin:DevTeam+1379@localhost:30432/orders"  # Update as needed
+DATABASE_URL = "postgresql://admin:DevTeam+1379@postgres:30432/orders"  # Update as needed
 
 # Auth service URL
-AUTH_SERVICE_URL = "http://localhost:8010"  # Kubernetes service name
+AUTH_SERVICE_URL = "http://auth-service:8010"  # Kubernetes service name
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 

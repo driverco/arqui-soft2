@@ -55,6 +55,7 @@ CREATE TABLE public.audit_logs (
                 timestamp TIMESTAMP NOT NULL,
                 user_agent VARCHAR(512) NOT NULL,
                 ip VARCHAR(64) NOT NULL,
+                pod VARCHAR(256),
                 CONSTRAINT audit_logs_pk PRIMARY KEY (log_id)
 );
 

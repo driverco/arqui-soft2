@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: auth-service
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: auth-service
@@ -20,7 +20,7 @@ spec:
         - containerPort: 8010
         env:
         - name: DATABASE_URL
-          value: "postgresql://admin:DevTeam+1379@postgres-service:5432/orders"  # Update with your DB service
+          value: "postgresql://admin:DevTeam+1379@postgres:5432/orders"  # Update with your DB service
         - name: SECRET_KEY
           value: "mi_llave_secreta_muy_segura"
         resources:

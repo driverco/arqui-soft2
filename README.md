@@ -2,6 +2,13 @@ Arquitectura de software Experimento 2
 
 Comandos a ejecutar
 
+minikube start --driver=docker
+minikube dashboard &
+
+minikube service pgadmin --url &
+
+
+
 
 
 kubectl apply -f database/postgres-secret.yaml
@@ -10,17 +17,17 @@ kubectl apply -f database/postgres-deploy.yaml
 kubectl apply -f database/pgadmin-secret.yaml
 kubectl apply -f database/pgadmin-deploy.yaml
 
-minikube image build -t auth-service auth
+docker build -t auth-service auth
 minikube image load auth-service
 kubectl apply -f auth/deployment.yaml
 kubectl apply -f auth/service.yaml
 
-minikube image build -t orders-service orders
+docker build -t orders-service orders
 minikube image load orders-service
 kubectl apply -f orders/deployment.yaml
 kubectl apply -f orders/service.yaml
 
-minikube image build -t adminkubes-service adminkubes
+docker build -t adminkubes-service adminkubes
 minikube image load adminkubes-service
 kubectl apply -f adminkubes/deployment.yaml
 kubectl apply -f adminkubes/service.yaml

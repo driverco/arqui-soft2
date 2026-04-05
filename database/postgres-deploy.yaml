@@ -34,7 +34,7 @@ spec:
                  key: postgres-dbname
 
           volumeMounts:
-            - mountPath: /var/lib/postgresql/18/main
+            - mountPath: /var/lib/postgresql/
               name: postgredb
       volumes:
         - name: postgredb
@@ -49,13 +49,13 @@ spec:
         type: local
         app: postgres
     spec:
-      storageClassName: manual
+      storageClassName: standard
       capacity:
         storage: 5Gi
       accessModes:
         - ReadWriteMany
       hostPath:
-        path: "/mnt/data"
+        path: "/mnt/data/postgres"
 ---
     kind: PersistentVolumeClaim
     apiVersion: v1
@@ -65,6 +65,7 @@ spec:
         app: postgres
     spec:
       storageClassName: standard
+      volumeName: postgres-pv-volume
       accessModes:
         - ReadWriteMany
       resources:

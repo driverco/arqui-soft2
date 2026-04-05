@@ -13,8 +13,8 @@ spec:
         app: adminkubes-service
     spec:
       containers:
-      - name: admin-service
-        image: admin-service:latest  # Replace with your image registry/tag
+      - name: adminkubes-service
+        image: adminkubes-service:latest  # Replace with your image registry/tag
         imagePullPolicy: Never  #search in local images
         ports:
         - containerPort: 8030
