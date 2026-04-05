@@ -1,15 +1,15 @@
 
-CREATE SEQUENCE public.client_client_id_seq_1;
+CREATE SEQUENCE public.clients_client_id_seq_1;
 
-CREATE TABLE public.client (
-                client_id NUMERIC NOT NULL DEFAULT nextval('public.client_client_id_seq_1'),
+CREATE TABLE public.clients (
+                client_id NUMERIC NOT NULL DEFAULT nextval('public.clients_client_id_seq_1'),
                 name VARCHAR(256) NOT NULL,
                 docnum VARCHAR NOT NULL,
-                CONSTRAINT client_pk PRIMARY KEY (client_id)
+                CONSTRAINT clients_pk PRIMARY KEY (client_id)
 );
 
 
-ALTER SEQUENCE public.client_client_id_seq_1 OWNED BY public.client.client_id;
+ALTER SEQUENCE public.clients_client_id_seq_1 OWNED BY public.clients.client_id;
 
 CREATE SEQUENCE public.items_item_id_seq;
 

@@ -166,16 +166,16 @@
     </index>
    </folder>
   </table>
-  <table id="TAB43" populated="true" UUID="3b5fe3a3-d2d9-47a4-a2c5-f776085fc42b" name="client" objectType="TABLE" physicalName="client" >
+  <table id="TAB43" populated="true" UUID="3b5fe3a3-d2d9-47a4-a2c5-f776085fc42b" name="clients" objectType="TABLE" physicalName="clients" >
    <remarks></remarks>
    <folder id="FOLTAB431" populated="true" name="Columns" physicalName="Columns" type="1">
-    <column id="COL44" populated="true" UUID="29193014-57d4-4f76-aba9-70a78e536693" autoIncrement="true" autoIncrementSequenceName="client_client_id_seq_1" defaultValue="" name="client_id" nullable="0" physicalName="client_id" precision="0" primaryKeySeq="0" referenceCount="1" scale="0" sourceDataTypeName="UserDefinedSQLType" type="2" userDefinedTypeUUID="115245ce-612c-4d6a-b559-6dd903dd959a" >
+    <column id="COL44" populated="true" UUID="29193014-57d4-4f76-aba9-70a78e536693" autoIncrement="true" autoIncrementSequenceName="clients_client_id_seq" defaultValue="" name="client_id" nullable="0" physicalName="client_id" precision="0" primaryKeySeq="0" referenceCount="1" scale="0" sourceDataTypeName="UserDefinedSQLType" type="2" userDefinedTypeUUID="115245ce-612c-4d6a-b559-6dd903dd959a" >
      <remarks></remarks>
     </column>
-    <column id="COL45" populated="true" UUID="53a6b050-e8bb-4ec3-897d-f5ea87777c4a" autoIncrement="false" autoIncrementSequenceName="client_name_seq" defaultValue="" name="name" nullable="0" physicalName="name" precision="256" referenceCount="1" scale="0" sourceDataTypeName="UserDefinedSQLType" type="12" userDefinedTypeUUID="831ac2d4-0e65-47ec-a0b7-62b7f6b8760a" >
+    <column id="COL45" populated="true" UUID="53a6b050-e8bb-4ec3-897d-f5ea87777c4a" autoIncrement="false" autoIncrementSequenceName="clients_name_seq" defaultValue="" name="name" nullable="0" physicalName="name" precision="256" referenceCount="1" scale="0" sourceDataTypeName="UserDefinedSQLType" type="12" userDefinedTypeUUID="831ac2d4-0e65-47ec-a0b7-62b7f6b8760a" >
      <remarks></remarks>
     </column>
-    <column id="COL46" populated="true" UUID="9374fbb4-3fa5-4230-aa1d-253e11fa7124" autoIncrement="false" autoIncrementSequenceName="client_docnum_seq" defaultValue="" name="docnum" nullable="0" physicalName="docnum" precision="0" referenceCount="1" scale="0" sourceDataTypeName="UserDefinedSQLType" type="12" userDefinedTypeUUID="831ac2d4-0e65-47ec-a0b7-62b7f6b8760a" >
+    <column id="COL46" populated="true" UUID="9374fbb4-3fa5-4230-aa1d-253e11fa7124" autoIncrement="false" autoIncrementSequenceName="clients_docnum_seq" defaultValue="" name="docnum" nullable="0" physicalName="docnum" precision="0" referenceCount="1" scale="0" sourceDataTypeName="UserDefinedSQLType" type="12" userDefinedTypeUUID="831ac2d4-0e65-47ec-a0b7-62b7f6b8760a" >
      <remarks></remarks>
     </column>
     </folder>
@@ -184,7 +184,7 @@
     <folder id="FOLTAB432" populated="true" name="Imported Keys" physicalName="Imported Keys" type="2">
     </folder>
     <folder id="FOLTAB434" populated="true" name="Indices" physicalName="Indices" type="4">
-    <index id="IDX47" populated="true" UUID="22e09c8b-a76b-4e55-a7e3-c8fd69dd5dc4" clustered="false" name="client_pk" physicalName="client_pk" primaryKeyIndex="true" unique="false" >
+    <index id="IDX47" populated="true" UUID="22e09c8b-a76b-4e55-a7e3-c8fd69dd5dc4" clustered="false" name="clients_pk" physicalName="client_pk" primaryKeyIndex="true" unique="false" >
      <index-column id="IDC48" populated="true" UUID="078da1f7-14dc-430a-8e7b-33e4c5bcf317" ascendingOrDescending="UNSPECIFIED" column-ref="COL44" name="client_id" physicalName="client_id" />
     </index>
    </folder>
