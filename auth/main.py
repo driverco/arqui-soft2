@@ -128,45 +128,16 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
     log_audit(user["username"], request.method, request.url.path, request.headers.get("user-agent", "none"), request.client.host)
     return {"access_token": access_token, "token_type": "bearer"}
 
-@app.get("/admin-only")
-async def admin_only(request: Request, current_user: TokenData = Depends(require_role("admin"))):
+
+@app.get("/validate")
+async def validate(request: Request, current_user: TokenData = Depends(require_role("user", "admin", "supervisor"))):
     try:
         log_audit(current_user.username, request.method, request.url.path, request.headers.get("user-agent", "none"), request.client.host)
-        return {"message": f"Accceso concedido a {current_user.username} con rol {current_user.role}"}
+        return {"username": current_user.username, "role": current_user.role}
     except HTTPException as e:
         if e.status_code == 403:
             log_audit(current_user.username, request.method, request.url.path, request.headers.get("user-agent", "none"), request.client.host)
-            raise HTTPException(status_code=403, detail="Acceso denegado: Solo administradores permitidos")
-        raise
-
-@app.get("/users-and-admins")
-async def users_and_admins(request: Request, current_user: TokenData = Depends(require_role("user", "admin"))):
-    try:
-        return {"message": f"Accceso concedido a {current_user.username} con rol {current_user.role}"}
-    except HTTPException as e:
-        if e.status_code == 403:
-            log_audit(current_user.username, request.method, request.url.path, request.headers.get("user-agent", "none"), request.client.host)
-            raise HTTPException(status_code=403, detail="Acceso denegado: Solo usuarios y administradores permitidos")
-        raise
-
-@app.get("/users-and-supervisors")
-async def users_and_supervisors(request: Request, current_user: TokenData = Depends(require_role("user", "supervisor"))):
-    try:
-        return {"message": f"Accceso concedido a {current_user.username} con rol {current_user.role}"}
-    except HTTPException as e:
-        if e.status_code == 403:
-            log_audit(current_user.username, request.method, request.url.path, request.headers.get("user-agent", "none"), request.client.host)
-            raise HTTPException(status_code=403, detail="Acceso denegado: Solo usuarios y supervisores permitidos")
-        raise
-
-@app.get("/admins-and-supervisors")
-async def admins_and_supervisors(request: Request, current_user: TokenData = Depends(require_role("admin", "supervisor"))):
-    try:
-        return {"message": f"Accceso concedido a {current_user.username} con rol {current_user.role}"}
-    except HTTPException as e:
-        if e.status_code == 403:
-            log_audit(current_user.username, request.method, request.url.path, request.headers.get("user-agent", "none"), request.client.host)
-            raise HTTPException(status_code=403, detail="Acceso denegado: Solo administradores y supervisores permitidos")
+            raise HTTPException(status_code=403, detail="Acceso denegado: Rol invalido")
         raise
 
 

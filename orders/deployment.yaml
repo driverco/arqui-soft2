@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: orders-service
+  template:
+    metadata:
+      labels:
+        app: orders-service
+    spec:
+      containers:
+      - name: orders-service
+        image: orders-service:latest  # Replace with your image registry/tag
+        imagePullPolicy: Never  #search in local images
+        ports:
+        - containerPort: 8010
+        env:
+        - name: DATABASE_URL
+          value: "postgresql://admin:DevTeam+1379@postgres-service:5432/orders"  # Update with your DB service
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
