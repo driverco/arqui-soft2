@@ -56,18 +56,19 @@ order-service     8020
 admin-service     8030
 
 
-#TODO
+# TODO
 
 - crear casos de prueba del servicio de orders (locust)
 - crear el APIGATEWAY Y DESDE AHI LOGUIEAR TODAS LAS PETICIONES A LA BASE DE DATOS (dos deplyments o replicas)
 (Juan) - ampliar el servicio de create order metiendo los items (Juan)
 - metricas
 - crear el componente/servicio de analitica de seguridad
-(Wilmer) - resolver problemas de permisos del write-pod adminkubes
-- validacion de la idempotencia en las operaciones de escritura de base de datos
 (William) - modificar la presentacion
 - *Grafana *Prometheus
 - videos de pruebas
 - conclusiones del experimento
 
+# DONE
+- resolver problemas de permisos del write-pod adminkubes
+- validacion de la idempotencia en las operaciones de escritura de base de datos
 
