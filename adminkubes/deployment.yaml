@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adminkubes-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: adminkubes-service
+  template:
+    metadata:
+      labels:
+        app: adminkubes-service
+    spec:
+      containers:
+      - name: admin-service
+        image: admin-service:latest  # Replace with your image registry/tag
+        imagePullPolicy: Never  #search in local images
+        ports:
+        - containerPort: 8030
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"

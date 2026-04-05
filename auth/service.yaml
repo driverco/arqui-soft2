@@ -6,6 +6,6 @@ spec:
   selector:
     app: auth-service
   ports:
-  - port: 80
+  - port: 8010
     targetPort: 8000
   type: ClusterIP  # Or LoadBalancer/Ingress for external access
