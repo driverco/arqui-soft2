@@ -22,7 +22,11 @@ spec:
         - name: DATABASE_URL
           value: "postgresql://admin:DevTeam+1379@postgres:5432/orders"  # Update with your DB service
         - name: SECRET_KEY
-          value: "mi_llave_secreta_muy_segura"
+          value: "experimento2UAndes"
+        - name: ACCESS_TOKEN_EXPIRE_MINUTES
+          value: "30"
+        - name: ALGORITHM
+          value: "HS256"
         resources:
           requests:
             memory: "128Mi"

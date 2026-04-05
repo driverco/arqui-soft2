@@ -1,4 +1,11 @@
 
+CREATE TABLE public.token_blacklist (
+                token_hash VARCHAR NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
+                CONSTRAINT token_blacklist_pk PRIMARY KEY (token_hash)
+);
+
+
 CREATE SEQUENCE public.clients_client_id_seq;
 
 CREATE TABLE public.clients (

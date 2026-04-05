@@ -4,6 +4,8 @@ ALTER TABLE public.orders_items DROP CONSTRAINT IF EXISTS items_orders_items_fk;
 ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS users_orders_fk;
 
 -- Drop tables in reverse dependency order
+
+DROP TABLE IF EXISTS public.token_blacklist;
 DROP TABLE IF EXISTS public.orders_items;
 DROP TABLE IF EXISTS public.orders;
 DROP TABLE IF EXISTS public.audiT_logs;

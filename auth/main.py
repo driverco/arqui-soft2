@@ -13,7 +13,6 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from passlib.context import CryptContext
 import hashlib
-import socket
 import os
 
 # Contexto para hashing de contraseñas
@@ -35,7 +34,7 @@ def get_db_connection():
 
 def get_request_info(request: Request):
     """Extract client IP and pod hostname from request"""
-    return (request.client.host, os.getenv("HOSTNAME"))
+    return (request.method, request.url.path, request.headers.get("user-agent", "none"), request.client.host, os.getenv("HOSTNAME"))
 
 def log_audit(username, method, endpoint, user_agent, ip, pod):
     try:
@@ -115,7 +114,7 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
     conn.close()
     
     if not user or not verify_password(form_data.password, user["password"]):
-        log_audit(form_data.username, request.method, request.url.path, request.headers.get("user-agent", "none"), *get_request_info(request))
+        log_audit(form_data.username, *get_request_info(request))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario o contraseña incorrectos",
@@ -123,54 +122,56 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
         )
     
     access_token = create_access_token(data={"sub": user["username"], "role": user["role"]})
-    log_audit(user["username"], request.method, request.url.path, request.headers.get("user-agent", "none"), *get_request_info(request))
+    log_audit(user["username"], *get_request_info(request))
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@app.get("/validate")
-async def validate(request: Request, current_user: TokenData = Depends(require_role("user", "admin", "supervisor"))):
-    try:
-        log_audit(current_user.username, request.method, request.url.path, request.headers.get("user-agent", "none"), *get_request_info(request))
-        return {"username": current_user.username, "role": current_user.role}
-    except HTTPException as e:
-        if e.status_code == 403:
-            log_audit(current_user.username, request.method, request.url.path, request.headers.get("user-agent", "none"), *get_request_info(request))
-            raise HTTPException(status_code=403, detail="Acceso denegado: Rol invalido")
-        raise
+
+
+
+async def log_and_validate(request: Request, token: str, allowed_roles: list):
+
+    current_user = get_current_user()
+    print(f"Current user: {current_user.username}, role: {current_user.role}")
+    log_audit(current_user.username, *get_request_info(request))
+    if not current_user.username:
+        raise HTTPException(status_code=401, detail="Token inválido o acceso denegado")
+    if not await require_role(*allowed_roles):
+        raise HTTPException(status_code=403, detail="Acceso denegado")
 
 
 @app.get("/users/me")
 async def read_users_me(request: Request, token: str = Depends(oauth2_scheme)):
     if is_token_blacklisted(token):
-        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+        raise HTTPException(status_code=401, detail="Token blacklisted")
     try:
         payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=[os.getenv("ALGORITHM")])
         username: str = payload.get("sub")
         if username is None:
-            log_audit(None, request.method, request.url.path, request.headers.get("user-agent", "none"), *get_request_info(request))
+            log_audit(None, *get_request_info(request))
             raise HTTPException(status_code=401, detail="Token inválido")
     except jwt.PyJWTError:
-        log_audit(None, request.method, request.url.path, request.headers.get("user-agent", "none"), *get_request_info(request))
+        log_audit(None, *get_request_info(request))
         raise HTTPException(status_code=401, detail="Token inválido o expirado")
         
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT username, full_name FROM users WHERE username = %s", (username,))
+    cursor.execute("SELECT username FROM users WHERE username = %s", (username,))
     user = cursor.fetchone()
     cursor.close()
     conn.close()
-    
     if not user:
-        log_audit(username, request.method, request.url.path, request.headers.get("user-agent", "none"), *get_request_info(request))
+        log_audit(username, *get_request_info(request))
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     
-    log_audit(username, request.method, request.url.path, request.headers.get("user-agent", "none"), *get_request_info(request))
-    return {"username": user["username"], "full_name": user["full_name"]}
+    log_audit(username, *get_request_info(request))
+    return {"username": user["username"], "role": payload.get("role")}
+
 
 @app.post("/logout")
 async def logout(request: Request, token: str = Depends(oauth2_scheme), current_user: TokenData = Depends(get_current_user)):
     blacklist_token(token)
-    log_audit(current_user.username, request.method, request.url.path, request.headers.get("user-agent", "none"), *get_request_info(request))
+    log_audit(current_user.username, *get_request_info(request))
     return {"message": f"Usuario {current_user.username} ha cerrado sesión exitosamente"}
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
