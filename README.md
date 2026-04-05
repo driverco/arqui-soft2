@@ -18,3 +18,17 @@ minikube image build -t orders-service orders
 minikube image load orders-service
 kubectl apply -f orders/deployment.yaml
 kubectl apply -f orders/service.yaml
+
+
+kubectl rollout restart deployment auth-service
+kubectl rollout restart deployment orders-service
+
+Service           port
+----------------------
+postgres          5432
+auth-service      8000
+order-service     8010
+admin-service     8020
+
+
+

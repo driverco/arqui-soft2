@@ -117,7 +117,8 @@ async def get_orders(request: Request, current_user: TokenData = Depends(require
     return orders
 
 @app.get("/my-orders")
-async def get_my_orders(current_user: TokenData = Depends(get_current_user)):
+async def get_my_orders(request: Request,current_user: TokenData = Depends(get_current_user)):
+    log_audit(current_user.username, request.method, request.url.path, request.headers.get("user-agent", "none"), request.client.host)
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT user_id FROM users WHERE username = %s", (current_user.username,))
