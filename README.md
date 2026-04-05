@@ -8,6 +8,13 @@ minikube dashboard &
 minikube service pgadmin --url &
 
 
+kubectl create serviceaccount my-app-sa
+
+kubectl create rolebinding my-app-view-binding \
+  --clusterrole=view \
+  --serviceaccount=default:my-app-sa
+
+kubectl auth can-i list pods --as=system:serviceaccount:default:default
 
 
 

@@ -12,6 +12,7 @@ spec:
       labels:
         app: adminkubes-service
     spec:
+      serviceAccountName: my-app-sa
       containers:
       - name: adminkubes-service
         image: adminkubes-service:latest  # Replace with your image registry/tag
