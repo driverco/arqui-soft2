@@ -1,15 +1,15 @@
 
-CREATE SEQUENCE public.clients_client_id_seq_1;
+CREATE SEQUENCE public.clients_client_id_seq;
 
 CREATE TABLE public.clients (
-                client_id NUMERIC NOT NULL DEFAULT nextval('public.clients_client_id_seq_1'),
+                client_id NUMERIC NOT NULL DEFAULT nextval('public.clients_client_id_seq'),
                 name VARCHAR(256) NOT NULL,
                 docnum VARCHAR NOT NULL,
                 CONSTRAINT clients_pk PRIMARY KEY (client_id)
 );
 
 
-ALTER SEQUENCE public.clients_client_id_seq_1 OWNED BY public.clients.client_id;
+ALTER SEQUENCE public.clients_client_id_seq OWNED BY public.clients.client_id;
 
 CREATE SEQUENCE public.items_item_id_seq;
 
@@ -45,11 +45,13 @@ CREATE TABLE public.users_user_agent (
 );
 
 
-CREATE SEQUENCE public.audi_logs_log_id_seq;
+CREATE SEQUENCE public.audit_logs_log_id_seq;
 
-CREATE TABLE public.audi_logs (
-                log_id NUMERIC NOT NULL DEFAULT nextval('public.audi_logs_log_id_seq'),
-                user_id NUMERIC NOT NULL,
+CREATE TABLE public.audit_logs (
+                log_id NUMERIC NOT NULL DEFAULT nextval('public.audit_logs_log_id_seq'),
+                user_id NUMERIC,
+                method VARCHAR NOT NULL,
+                endpoint VARCHAR NOT NULL,
                 timestamp TIMESTAMP NOT NULL,
                 user_agent VARCHAR(512) NOT NULL,
                 ip VARCHAR(64) NOT NULL,
@@ -57,7 +59,7 @@ CREATE TABLE public.audi_logs (
 );
 
 
-ALTER SEQUENCE public.audi_logs_log_id_seq OWNED BY public.audi_logs.log_id;
+ALTER SEQUENCE public.audit_logs_log_id_seq OWNED BY public.audit_logs.log_id;
 
 CREATE SEQUENCE public.orders_order_id_seq;
 
@@ -83,7 +85,7 @@ CREATE TABLE public.orders_items (
 
 ALTER TABLE public.orders ADD CONSTRAINT client_orders_fk
 FOREIGN KEY (client_id)
-REFERENCES public.client (client_id)
+REFERENCES public.clients (client_id)
 ON DELETE NO ACTION
 ON UPDATE NO ACTION
 NOT DEFERRABLE;
@@ -102,7 +104,7 @@ ON DELETE NO ACTION
 ON UPDATE NO ACTION
 NOT DEFERRABLE;
 
-ALTER TABLE public.audi_logs ADD CONSTRAINT users_audi_logs_fk
+ALTER TABLE public.audit_logs ADD CONSTRAINT users_audit_logs_fk
 FOREIGN KEY (user_id)
 REFERENCES public.users (user_id)
 ON DELETE NO ACTION
