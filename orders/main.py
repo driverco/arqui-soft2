@@ -100,10 +100,15 @@ async def log_and_validate(request: Request, token: str, allowed_roles: list):
     if not await require_role(current_user, *allowed_roles):
         raise HTTPException(status_code=403, detail="Acceso denegado")
 
+class OrderCreateItem(BaseModel):
+    item_id: int
+    quantity: int
+    unit_value: float
 
 class OrderCreate(BaseModel):
     user_id: Optional[int] = None
     client_id: int
+    items: list[OrderCreateItem]
 
 class Order(BaseModel):
     order_id: int
@@ -118,93 +123,112 @@ async def create_order(request: Request, order: OrderCreate):
     log_audit(current_user.username, *get_request_info(request))
 
     conn = get_db_connection()
+    conn.autocommit = False
     cursor = conn.cursor()
 
-    cursor.execute("SELECT user_id FROM users WHERE username = %s", (current_user.username,))
-    user_row = cursor.fetchone()
-    if not user_row:
+    try:
+        cursor.execute("SELECT user_id FROM users WHERE username = %s", (current_user.username,))
+        user_row = cursor.fetchone()
+        if not user_row:
+            raise HTTPException(status_code=400, detail="Usuario autenticado no encontrado")
+
+        authenticated_user_id = user_row["user_id"]
+        target_user_id = order.user_id if order.user_id else authenticated_user_id
+
+        if current_user.role == "U" and target_user_id != authenticated_user_id:
+            raise HTTPException(status_code=403, detail="Los usuarios no pueden crear órdenes para otro usuario")
+
+        cursor.execute(
+            "INSERT INTO orders (user_id, timestamp, client_id) VALUES (%s, NOW(), %s) RETURNING order_id, user_id, timestamp, client_id",
+            (target_user_id, order.client_id)
+        )
+        new_order = cursor.fetchone()
+        order_id = new_order["order_id"]
+
+        if order.items:
+            item_ids = [item.item_id for item in order.items]
+            cursor.execute(
+                "SELECT item_id FROM items WHERE item_id = ANY(%s)",
+                (item_ids,)
+            )
+            existing_items = {row["item_id"] for row in cursor.fetchall()}
+            missing_items = [item_id for item_id in item_ids if item_id not in existing_items]
+            if missing_items:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Los siguientes item_id no existen: {missing_items}"
+                )
+
+            for item in order.items:
+                cursor.execute(
+                    "INSERT INTO orders_items (order_id, item_id, quantity, unit_value) VALUES (%s, %s, %s, %s)",
+                    (order_id, item.item_id, item.quantity, item.unit_value)
+                )
+
+        conn.commit()
+        return new_order
+    except HTTPException:
+        conn.rollback()
         cursor.close()
         conn.close()
-        raise HTTPException(status_code=400, detail="Usuario autenticado no encontrado")
-
-    authenticated_user_id = user_row["user_id"]
-    target_user_id = order.user_id if order.user_id else authenticated_user_id
-
-    if current_user.role == "U" and target_user_id != authenticated_user_id:
+        raise
+    except psycopg2.Error as e:
+        conn.rollback()
         cursor.close()
         conn.close()
-        raise HTTPException(status_code=403, detail="Los usuarios no pueden crear órdenes para otro usuario")
-
-    cursor.execute(
-        "INSERT INTO orders (user_id, timestamp, client_id) VALUES (%s, NOW(), %s) RETURNING order_id, user_id, timestamp, client_id",
-        (target_user_id, order.client_id)
-    )
-    new_order = cursor.fetchone()
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return new_order
-
-
-
-
+        logger.error(f"Database error creating order: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al crear la orden")
+    except Exception as e:
+        conn.rollback()
+        cursor.close()
+        conn.close()
+        logger.error(f"Unexpected error creating order: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error inesperado al crear la orden")
+    finally:
+        if not cursor.closed:
+            cursor.close()
+        if conn and not conn.closed:
+            conn.close()
 
 
-
-
-@app.get("/orders")
-async def get_orders(request: Request, token: Annotated[str, Depends(oauth2_scheme)]):
-    #logger.info(f"Token: {token}")
-    await log_and_validate( request, token, allowed_roles=["A", "S"])
-    logger.info("Retrieving all orders")
+async def get_filtered_orders(user_id: Optional[int] = None):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT order_id, user_id, timestamp, client_id FROM orders")
+    if user_id is not None:
+        cursor.execute("SELECT order_id, user_id, timestamp, client_id FROM orders WHERE user_id = %s", (user_id,))
+    else:
+        cursor.execute("SELECT order_id, user_id, timestamp, client_id FROM orders")
     orders = cursor.fetchall()
     cursor.close()
     conn.close()
     return orders
 
 
+@app.get("/orders")
+async def get_orders(request: Request, token: Annotated[str, Depends(oauth2_scheme)]):
+    logger.info(f"Token: {token}")
+    await log_and_validate( request, token, allowed_roles=["A", "S"])
+    logger.info("Retrieving all orders")
+    orders = await get_filtered_orders()
+    return orders
 
 
+@app.get("/orders/{user_id}")
+async def get_ordersbyuser(request: Request, user_id: int):
+    await log_and_validate( request, oauth2_scheme, allowed_roles=["A", "S", "U"])
+    current_user = await get_current_user_from_token(oauth2_scheme)
+    if current_user.role == "U" :
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id FROM users WHERE username = %s", (current_user.username,))
+        user_row = cursor.fetchone()
+        cursor.close()
+        if int(user_id) != int(user_row["user_id"]):
+            raise HTTPException(status_code=403, detail="Los usuarios no pueden ver órdenes de otro usuario")
+        conn.close()
+    orders = await get_filtered_orders(user_id=user_id)
+    return orders
 
-
-
-
-
-
-# @app.get("/orders/{user_id}")
-# async def get_ordersbyuser(request: Request, user_id: int):
-#     await log_and_validate( request, allowed_roles=["A", "S", "U"])
-#     current_user = await get_current_user_from_token(oauth2_scheme)
-#     if current_user.role == "U" :
-#         conn = get_db_connection()
-#         cursor = conn.cursor()
-#         cursor.execute("SELECT user_id FROM users WHERE username = %s", (current_user.username,))
-#         user_row = cursor.fetchone()
-#         cursor.close()
-#         if int(user_id) != int(user_row["user_id"]):
-#             raise HTTPException(status_code=403, detail="Los usuarios no pueden ver órdenes de otro usuario")
-
-#     conn = get_db_connection()
-#     cursor = conn.cursor()
-#     cursor.execute("SELECT order_id, user_id, timestamp, client_id FROM orders WHERE user_id = %s", (user_id,))
-#     orders = cursor.fetchall()
-#     cursor.close()
-#     conn.close()
-#     return orders
-
-
-
-
-
-
-
-
-
-
-    
 
 @app.get("/my-orders")
 async def get_my_orders(request: Request):
@@ -219,10 +243,9 @@ async def get_my_orders(request: Request):
         conn.close()
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     user_id = user["user_id"]
-    cursor.execute("SELECT order_id, user_id, timestamp, client_id FROM orders WHERE user_id = %s", (user_id,))
-    orders = cursor.fetchall()
     cursor.close()
     conn.close()
+    orders = await get_filtered_orders(user_id=user_id)
     return orders
 
 @app.get("/")
