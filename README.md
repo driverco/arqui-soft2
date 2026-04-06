@@ -17,7 +17,6 @@ kubectl create rolebinding my-app-view-binding \
 kubectl auth can-i list pods --as=system:serviceaccount:default:default
 
 
-
 kubectl apply -f database/postgres-secret.yaml
 kubectl apply -f database/postgres-configmap.yaml
 kubectl apply -f database/postgres-deploy.yaml
@@ -39,9 +38,17 @@ minikube image load adminkubes-service
 kubectl apply -f adminkubes/deployment.yaml
 kubectl apply -f adminkubes/service.yaml
 
+docker build -t apigateway-service apigateway
+minikube image load apigateway-service
+kubectl apply -f apigateway/deployment.yaml
+kubectl apply -f apigateway/service.yaml
+
+
+
 kubectl rollout restart deployment auth-service
 kubectl rollout restart deployment orders-service
 kubectl rollout restart deployment adminkubes-service
+kubectl rollout restart deployment apigateway-service
 
 
 minikube service auth-service --url &
@@ -49,26 +56,24 @@ minikube service orders-service --url &
 minikube service adminkubes-service --url &
 
 Service           port
-----------------------
-postgres          5432
-auth-service      8010
-order-service     8020
-admin-service     8030
-
+------------------------
+postgres            5432
+auth-service        8010
+order-service       8020
+admin-service       8030
+apigateway-service  8040
 
 # TODO
-
 - crear casos de prueba del servicio de orders (locust)
-- crear el APIGATEWAY Y DESDE AHI LOGUIEAR TODAS LAS PETICIONES A LA BASE DE DATOS (dos deplyments o replicas)
-(Juan) - ampliar el servicio de create order metiendo los items (Juan)
-- metricas
 - crear el componente/servicio de analitica de seguridad
 (William) - modificar la presentacion
-- *Grafana *Prometheus
 - videos de pruebas
 - conclusiones del experimento
 
 # DONE
+- crear el test python(locust) con un caso de prueba
+- crear el APIGATEWAY Y DESDE AHI LOGUIEAR TODAS LAS PETICIONES A LA BASE DE DATOS (dos deplyments o replicas)
 - resolver problemas de permisos del write-pod adminkubes
 - validacion de la idempotencia en las operaciones de escritura de base de datos
+- ampliar el servicio de create order metiendo los items (Juan)
 

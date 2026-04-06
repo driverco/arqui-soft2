@@ -1,30 +1,30 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: orders-service
+  name: apigateway-service
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
-      app: orders-service
+      app: apigateway-service
   template:
     metadata:
       labels:
-        app: orders-service
+        app: apigateway-service
     spec:
       containers:
-      - name: orders-service
-        image: orders-service:latest  # Replace with your image registry/tag
+      - name: apigateway-service
+        image: apigateway-service:latest  # Replace with your image registry/tag
         imagePullPolicy: Never  #search in local images
         ports:
-        - containerPort: 8020
+        - containerPort: 8040
         env:
-        - name: DATABASE_URL
-          value: "postgresql://admin:DevTeam+1379@postgres:5432/orders"  # Update with your DB service
         - name: AUTH_SERVICE_URL
           value: "http://auth-service:8010"  # Update with your Auth service URL
-        - name: ADMINKUBES_SERVICE_URL
+        - name:  ADMINKUBES_SERVICE_URL
           value: "http://adminkubes-service:8030"  # Update with your AdminKubes service URL
+        - name: ORDERS_PORT
+          value: "8000"  # Update with your Orders service port
         resources:
           requests:
             memory: "128Mi"

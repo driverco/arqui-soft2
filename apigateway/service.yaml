@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: apigateway-service
+spec:
+  selector:
+    app: apigateway-service
+  ports:
+  - port: 8040
+    targetPort: 8000
+  type: NodePort  # Or LoadBalancer/Ingress for external access

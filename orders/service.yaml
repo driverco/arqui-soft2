@@ -8,4 +8,7 @@ spec:
   ports:
   - port: 8020
     targetPort: 8000
-  type: ClusterIP  # Or LoadBalancer/Ingress for external access
+  type: NodePort  # Or LoadBalancer/Ingress for external access
+  ports:
+  - port: 8000
+    nodePort: 30080

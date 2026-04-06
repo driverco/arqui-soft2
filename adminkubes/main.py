@@ -19,6 +19,7 @@ async def get_pods_status():
         pod_statuses.append({
             "name": pod.metadata.name,
             "status": pod.status.phase,
+            "pod_ip": pod.status.pod_ip,
             "ready": all(container.ready for container in pod.status.container_statuses or [])
         })
     return {"pods": pod_statuses}
