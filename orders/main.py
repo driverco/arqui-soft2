@@ -198,10 +198,31 @@ async def get_filtered_orders(user_id: Optional[int] = None):
         cursor.execute("SELECT order_id, user_id, timestamp, client_id FROM orders WHERE user_id = %s", (user_id,))
     else:
         cursor.execute("SELECT order_id, user_id, timestamp, client_id FROM orders")
+    
     orders = cursor.fetchall()
+    order_ids = [order["order_id"] for order in orders]
+
+    if order_ids:
+        cursor.execute(
+            "SELECT order_id, item_id, quantity, unit_value FROM orders_items WHERE order_id = ANY(%s)",
+            (order_ids,)
+        )
+        items_rows = cursor.fetchall()
+    else:
+        items_rows = []
+
     cursor.close()
     conn.close()
-    return orders
+
+    orders_by_id = {order["order_id"]: dict(order, items=[]) for order in orders}
+    for item_row in items_rows:
+        orders_by_id[item_row["order_id"]]["items"].append({
+            "item_id": item_row["item_id"],
+            "quantity": item_row["quantity"],
+            "unit_value": item_row["unit_value"]
+        })
+
+    return list(orders_by_id.values())
 
 
 @app.get("/orders")
