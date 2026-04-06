@@ -131,6 +131,20 @@ async def proxy_orders(request: Request, path: str):
         response = None
         body_content = await request.body()
         headers = {k: v for k, v in request.headers.items() if k.lower() != 'host'}
+        original_user_agent = request.headers.get('user-agent')
+        if original_user_agent:
+            headers['X-Original-User-Agent'] = original_user_agent
+        
+        client_ip = request.client.host
+
+        x_forwarded_for = request.headers.get("x-forwarded-for")
+
+        if x_forwarded_for:
+            forwarded_for = f"{x_forwarded_for}, {client_ip}"
+        else:
+            forwarded_for = client_ip
+
+        headers['X-Forwarded-For'] = forwarded_for
         
         for pod in order_pods:
             try:

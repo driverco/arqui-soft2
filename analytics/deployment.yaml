@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: orders-service
+  name: analytics-service
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
-      app: orders-service
+      app: analytics-service
   template:
     metadata:
       labels:
-        app: orders-service
+        app: analytics-service
     spec:
       containers:
-      - name: orders-service
-        image: orders-service:latest #192.168.5.4:5500/orders-service  
+      - name: analytics-service
+        image: analytics-service:latest #192.168.5.4:5500/analytics-service  
         imagePullPolicy: Never #Always
         ports:
-        - containerPort: 8020
+        - containerPort: 8090
         env:
         - name: DATABASE_URL
           value: "postgresql://admin:DevTeam+1379@postgres:5432/orders"  # Update with your DB service
@@ -25,8 +25,6 @@ spec:
           value: "http://auth-service:8010"  # Update with your Auth service URL
         - name: ADMINKUBES_SERVICE_URL
           value: "http://adminkubes-service:8030"  # Update with your AdminKubes service URL
-        - name: ANALYTICS_SERVICE_URL
-          value: "http://analytics-service:8090"  # Update with your Analytics service URL
         resources:
           requests:
             memory: "128Mi"

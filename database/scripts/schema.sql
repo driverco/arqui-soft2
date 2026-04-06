@@ -63,6 +63,8 @@ CREATE TABLE public.audit_logs (
                 user_agent VARCHAR(512) NOT NULL,
                 ip VARCHAR(64) NOT NULL,
                 pod VARCHAR(256),
+                security_status VARCHAR(64) NOT NULL DEFAULT 'NORMAL',
+                security_message VARCHAR(1024),
                 CONSTRAINT audit_logs_pk PRIMARY KEY (log_id)
 );
 

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 # Configure logging
@@ -7,7 +8,7 @@ logger = logging.getLogger(__name__)
 from typing import Annotated
 
 
-from fastapi import FastAPI, HTTPException, Request, Header, Depends
+from fastapi import FastAPI, HTTPException, Request, Header, Depends, Response
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from psycopg2.extras import RealDictCursor
@@ -16,6 +17,8 @@ from datetime import datetime
 from typing import Optional
 import httpx
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 app = FastAPI()
 
@@ -46,16 +49,16 @@ async def writepod():
     return podname==writepod
 
 
-async def log_audit(username, method, endpoint, user_agent, ip, pod):
+async def log_audit(username, method, endpoint, user_agent, ip, pod, security_status="NORMAL", security_message=None):
     if (await writepod()):
         try:
             logger.info(f"Writing audit log: user={username}, method={method}, endpoint={endpoint}, user_agent={user_agent}, ip={ip}, pod={pod}")
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO audit_logs (user_id, method, endpoint, timestamp, user_agent, ip, pod) "
-                "VALUES ((select user_id from users where username = %s), %s, %s, now(), %s, %s, %s)",
-                (username, method, endpoint, user_agent, ip, pod),
+                "INSERT INTO audit_logs (user_id, method, endpoint, timestamp, user_agent, ip, pod, security_status, security_message) "
+                "VALUES ((select user_id from users where username = %s), %s, %s, now(), %s, %s, %s, %s, %s)",
+                (username, method, endpoint, user_agent, ip, pod, security_status, security_message),
             )
             conn.commit()
             cursor.close()
@@ -70,6 +73,7 @@ async def log_audit(username, method, endpoint, user_agent, ip, pod):
 
 
 async def get_current_user_from_token(token: str):
+    print (f"get_current_user_from_token - token: {token}")
     async with httpx.AsyncClient() as client:
         #logger.info(f"Sending request to {os.getenv('AUTH_SERVICE_URL')}/users/me with token: {token}")
         response = await client.get(f"{os.getenv('AUTH_SERVICE_URL')}/users/me", headers={"Authorization": f"Bearer {token}"})
@@ -116,10 +120,21 @@ class Order(BaseModel):
     timestamp: datetime
     client_id: int
 
+async def analyze_request(request: Request, user_id: int):
+    original_user_agent = request.headers.get("X-Original-User-Agent", request.headers.get("user-agent", "none"))
+    print("Original User-Agent: ", original_user_agent)
+    headers = {}
+    if original_user_agent:
+        headers["X-Original-User-Agent"] = original_user_agent
+
+    async with httpx.AsyncClient() as client:
+        print(user_id)
+        response = await client.get(f"{os.getenv('ANALYTICS_SERVICE_URL')}/analyze/{user_id}", headers=headers)
+        return response.json()
 
 @app.post("/orders", response_model=Order)
-async def create_order(request: Request, order: OrderCreate):
-    current_user = await get_current_user_from_token(oauth2_scheme)
+async def create_order(request: Request, order: OrderCreate, token: str = Depends(oauth2_scheme)):
+    current_user = await get_current_user_from_token(token)
     log_audit(current_user.username, *get_request_info(request))
 
     conn = get_db_connection()
@@ -191,7 +206,7 @@ async def create_order(request: Request, order: OrderCreate):
             conn.close()
 
 
-async def get_filtered_orders(user_id: Optional[int] = None):
+def get_filtered_orders(user_id: Optional[int] = None):
     conn = get_db_connection()
     cursor = conn.cursor()
     if user_id is not None:
@@ -230,14 +245,37 @@ async def get_orders(request: Request, token: Annotated[str, Depends(oauth2_sche
     logger.info(f"Token: {token}")
     await log_and_validate( request, token, allowed_roles=["A", "S"])
     logger.info("Retrieving all orders")
-    orders = await get_filtered_orders()
+
+    current_user = await get_current_user_from_token(token)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id FROM users WHERE username = %s", (current_user.username,))
+    user_row = cursor.fetchone()
+    user_id = user_row["user_id"] if user_row else None ### Falta acción si no se puede determinar el user_id
+    cursor.close()
+    conn.close()
+
+    loop = asyncio.get_running_loop()
+
+    orders_task = loop.run_in_executor(None, get_filtered_orders)
+    analytics_task = analyze_request(request, user_id)
+
+    orders, analysis = await asyncio.gather(orders_task, analytics_task)
+
+    if analysis.get("suspicious_activity"):
+        logger.warning(f"Suspicious activity detected for user {current_user.username}: {analysis}")
+        print(f"Suspicious activity detected for user {current_user.username}: {analysis}")
+        await log_audit(current_user.username, *get_request_info(request), security_status="BLOCKED", security_message=str(analysis))
+        return Response(content='{"detail": "Suspicious activity detected, access denied"}', status_code=403, media_type="application/json")
+    orders = get_filtered_orders()
+
     return orders
 
 
 @app.get("/orders/{user_id}")
-async def get_ordersbyuser(request: Request, user_id: int):
-    await log_and_validate( request, oauth2_scheme, allowed_roles=["A", "S", "U"])
-    current_user = await get_current_user_from_token(oauth2_scheme)
+async def get_ordersbyuser(request: Request, user_id: int, token: str = Depends(oauth2_scheme)):
+    await log_and_validate( request, token, allowed_roles=["A", "S", "U"])
+    current_user = await get_current_user_from_token(token)
     if current_user.role == "U" :
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -247,14 +285,14 @@ async def get_ordersbyuser(request: Request, user_id: int):
         if int(user_id) != int(user_row["user_id"]):
             raise HTTPException(status_code=403, detail="Los usuarios no pueden ver órdenes de otro usuario")
         conn.close()
-    orders = await get_filtered_orders(user_id=user_id)
+    orders = get_filtered_orders(user_id=user_id)
     return orders
 
 
 @app.get("/my-orders")
-async def get_my_orders(request: Request):
-    current_user = await get_current_user_from_token(oauth2_scheme)
-    log_audit(current_user.username, *get_request_info(request))
+async def get_my_orders(request: Request, token: str = Depends(oauth2_scheme)):
+    current_user = await get_current_user_from_token(token)
+    await log_audit(current_user.username, *get_request_info(request))
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT user_id FROM users WHERE username = %s", (current_user.username,))
@@ -266,7 +304,7 @@ async def get_my_orders(request: Request):
     user_id = user["user_id"]
     cursor.close()
     conn.close()
-    orders = await get_filtered_orders(user_id=user_id)
+    orders = get_filtered_orders(user_id=user_id)
     return orders
 
 @app.get("/")

@@ -14,8 +14,8 @@ spec:
     spec:
       containers:
       - name: apigateway-service
-        image: apigateway-service:latest  # Replace with your image registry/tag
-        imagePullPolicy: Never  #search in local images
+        image: apigateway-service:latest #192.168.5.4:5500/apigateway-service 
+        imagePullPolicy: Never #Always 
         ports:
         - containerPort: 8040
         env:
@@ -23,8 +23,10 @@ spec:
           value: "http://auth-service:8010"  # Update with your Auth service URL
         - name:  ADMINKUBES_SERVICE_URL
           value: "http://adminkubes-service:8030"  # Update with your AdminKubes service URL
+        - name: ORDERS_SERVICE_URL
+          value: "http://orders-service:8000"  # Update with your Orders service URL
         - name: ORDERS_PORT
-          value: "8000"  # Update with your Orders service port
+          value: "8000"
         resources:
           requests:
             memory: "128Mi"

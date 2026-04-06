@@ -15,8 +15,8 @@ spec:
       serviceAccountName: my-app-sa
       containers:
       - name: adminkubes-service
-        image: adminkubes-service:latest  # Replace with your image registry/tag
-        imagePullPolicy: Never  #search in local images
+        image: adminkubes-service:latest #192.168.5.4:5500/adminkubes-service  
+        imagePullPolicy: Never #Always
         ports:
         - containerPort: 8030
         resources:

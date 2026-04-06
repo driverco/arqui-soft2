@@ -14,6 +14,8 @@ from psycopg2.extras import RealDictCursor
 from passlib.context import CryptContext
 import hashlib
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 # Contexto para hashing de contraseñas
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -173,26 +175,6 @@ async def logout(request: Request, token: str = Depends(oauth2_scheme), current_
     blacklist_token(token)
     log_audit(current_user.username, *get_request_info(request))
     return {"message": f"Usuario {current_user.username} ha cerrado sesión exitosamente"}
-
-def get_current_user(token: str = Depends(oauth2_scheme)):
-    if is_token_blacklisted(token):
-        raise HTTPException(status_code=401, detail="Token inválido o expirado")
-    try:
-        payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=[os.getenv("ALGORITHM")])
-        username: str = payload.get("sub")
-        role: str = payload.get("role")
-        if username is None:
-            raise HTTPException(status_code=401, detail="Token inválido")
-        return TokenData(username=username, role=role)
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Token inválido o expirado")
-
-def require_role(*allowed_roles):
-    async def role_checker(current_user: TokenData = Depends(get_current_user)):
-        if current_user.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Permiso denegado")
-        return current_user
-    return role_checker
 
 if __name__ == "__main__":
     import uvicorn

@@ -14,8 +14,8 @@ spec:
     spec:
       containers:
       - name: auth-service
-        image: auth-service:latest  # Replace with your image registry/tag
-        imagePullPolicy: Never  #search in local images
+        image: auth-service:latest  #192.168.5.4:5500/auth-service  
+        imagePullPolicy: Never #Always
         ports:
         - containerPort: 8010
         env:
@@ -27,6 +27,8 @@ spec:
           value: "30"
         - name: ALGORITHM
           value: "HS256"
+        - name: ANALYTICS_SERVICE_URL
+          value: "http://analytics-service:8090"
         resources:
           requests:
             memory: "128Mi"
