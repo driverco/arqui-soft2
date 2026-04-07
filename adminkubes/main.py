@@ -1,11 +1,12 @@
 import asyncio
 import logging
+import os
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from kubernetes import client, config
 
-REFRESH_INTERVAL_SECONDS = 0.05
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,7 @@ async def refresh_snapshot_loop():
         except Exception:
             logger.exception("Failed to refresh Kubernetes snapshot")
 
-        await asyncio.sleep(REFRESH_INTERVAL_SECONDS)
+        await asyncio.sleep(float(os.getenv("REFRESH_INTERVAL_SECONDS") or 10))   
 
 
 @asynccontextmanager

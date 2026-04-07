@@ -16,9 +16,12 @@ spec:
       containers:
       - name: adminkubes-service
         image: adminkubes-service:latest #192.168.5.4:5500/adminkubes-service  
-        imagePullPolicy: Never #Always
+        imagePullPolicy: Always
         ports:
         - containerPort: 8030
+        env:
+        - name: REFRESH_INTERVAL_SECONDS
+          value: "0.05"
         resources:
           requests:
             memory: "128Mi"

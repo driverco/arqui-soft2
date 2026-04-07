@@ -43,17 +43,24 @@ minikube image load apigateway-service
 kubectl apply -f apigateway/deployment.yaml
 kubectl apply -f apigateway/service.yaml
 
+docker build -t analytics-service analytics
+minikube image load analytics-service
+kubectl apply -f analytics/deployment.yaml
+kubectl apply -f analytics/service.yaml
+
 
 
 kubectl rollout restart deployment auth-service
 kubectl rollout restart deployment orders-service
 kubectl rollout restart deployment adminkubes-service
 kubectl rollout restart deployment apigateway-service
+kubectl rollout restart deployment analytics-service
 
 
 minikube service auth-service --url &
 minikube service orders-service --url &
 minikube service adminkubes-service --url &
+minikube service apigateway-service &
 
 Service           port
 ------------------------
@@ -65,7 +72,7 @@ apigateway-service  8040
 
 # TODO
 - crear casos de prueba del servicio de orders (locust)
-- crear el componente/servicio de analitica de seguridad
+(Juan) - crear el componente/servicio de analitica de seguridad
 (William) - modificar la presentacion
 - videos de pruebas
 - conclusiones del experimento
