@@ -1,3 +1,4 @@
+import asyncio
 from importlib.resources import path
 import os
 
@@ -128,7 +129,6 @@ async def proxy_orders(request: Request, path: str):
         
         logger.info(f"Order service pods: {order_pods}")
         
-        response = None
         body_content = await request.body()
         headers = {k: v for k, v in request.headers.items() if k.lower() != 'host'}
         original_user_agent = request.headers.get('user-agent')
@@ -145,50 +145,62 @@ async def proxy_orders(request: Request, path: str):
             forwarded_for = client_ip
 
         headers['X-Forwarded-For'] = forwarded_for
-        
-        for pod in order_pods:
+
+        async def send_request(client: httpx.AsyncClient, pod_name: str, url: str, started: asyncio.Event):
             try:
-                pod_ip = pod.get('pod_ip')
-                pod_name = pod.get('name')
-                
-                if not pod_ip:
-                    logger.warning(f"Pod {pod_name} has no IP address, skipping")
-                    continue
-                
-                url = f"http://{pod_ip}:{os.getenv('ORDERS_PORT')}/{path}"
-                logger.info(f"Proxying request to pod: {pod_name}  url: {url} with method {request.method}")
-                
-                async with httpx.AsyncClient() as client:
-                    if writepod == pod_name:
-                        # For write pod, we want to return its response
-                        response = await client.request(
-                            method=request.method,
-                            url=url,
-                            headers=headers,
-                            content=body_content,
-                            params=request.query_params,
-                            timeout=10.0
-                        )
-                        logger.info(f"Response from write pod {pod_name}: {response.status_code}")
-                    else:
-                        # For read pods, send request without awaiting response
-                        try:
-                            await client.request(
-                                method=request.method,
-                                url=url,
-                                headers=headers,
-                                content=body_content,
-                                params=request.query_params,
-                                timeout=10.0
-                            )
-                            logger.info(f"Request sent to read pod {pod_name}")
-                        except httpx.HTTPError as e:
-                            logger.warning(f"Error sending request to read pod {pod_name}: {str(e)}")
-                            
+                started.set()
+                response = await client.request(
+                    method=request.method,
+                    url=url,
+                    headers=headers,
+                    content=body_content,
+                    params=request.query_params,
+                    timeout=10.0
+                )
+                logger.info(f"Response from pod {pod_name}: {response.status_code}")
+                return response
+            except httpx.HTTPError as e:
+                logger.warning(f"Error sending request to pod {pod_name}: {str(e)}")
+                return None
             except Exception as e:
-                logger.error(f"Error processing pod {pod.get('name')}: {str(e)}")
-                continue
-        
+                logger.error(f"Unexpected error sending request to pod {pod_name}: {str(e)}")
+                return None
+
+        dispatch_events = []
+        write_task = None
+
+        async with httpx.AsyncClient() as client:
+            for pod in order_pods:
+                try:
+                    pod_ip = pod.get('pod_ip')
+                    pod_name = pod.get('name')
+
+                    if not pod_ip:
+                        logger.warning(f"Pod {pod_name} has no IP address, skipping")
+                        continue
+
+                    url = f"http://{pod_ip}:{os.getenv('ORDERS_PORT')}/{path}"
+                    logger.info(f"Proxying request to pod: {pod_name}  url: {url} with method {request.method}")
+
+                    started = asyncio.Event()
+                    task = asyncio.create_task(send_request(client, pod_name, url, started))
+                    dispatch_events.append(started.wait())
+
+                    if writepod == pod_name:
+                        write_task = task
+                except Exception as e:
+                    logger.error(f"Error preparing pod {pod.get('name')}: {str(e)}")
+                    continue
+
+            if write_task is None:
+                logger.error("Write pod not found in available pods")
+                return Response(content='{"detail": "Write pod error"}', status_code=502, media_type="application/json")
+
+            if dispatch_events:
+                await asyncio.gather(*dispatch_events)
+
+            response = await write_task
+
         if response is None:
             logger.error("No response from write pod")
             return Response(content='{"detail": "Write pod error"}', status_code=502, media_type="application/json")
