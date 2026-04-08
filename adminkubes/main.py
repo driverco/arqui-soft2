@@ -7,8 +7,15 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from kubernetes import client, config
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 logger = logging.getLogger(__name__)
+
+
 
 v1 = None
 snapshot = {
@@ -60,10 +67,12 @@ def fetch_snapshot():
     current_writepod = snapshot["writepod"]
 
     if current_writepod not in running_pod_names:
+        logger.info(f"Experiment write pod - Deteccion de falla: {snapshot['writepod']}")
         current_writepod = ""
         for pod in pods.items:
             if pod.status.phase == "Running":
                 current_writepod = pod.metadata.name
+                logger.info(f"Experiment new write pod selected: {current_writepod}")
                 break
 
     snapshot = {
@@ -111,6 +120,7 @@ async def get_pods_status():
 
 @app.get("/write-pod")
 async def get_write_pod():
+    logger.info(f"Get Experiment write pod: {snapshot['writepod']}")
     return {"writepod": snapshot["writepod"]}
 
 

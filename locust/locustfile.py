@@ -1,13 +1,52 @@
+from random import random
 import time
 from locust import HttpUser, task
 
-class HelloWorldUser(HttpUser):
+class TestOrders(HttpUser):
     @task
     def view_order(self):
-        token_string = "TOKEN"
-
+        token_string = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdXBlcnZpc29yMSIsInJvbGUiOiJTIiwiZXhwIjoxNzc1NTQ2NTIyfQ.kHYzB8zJw7l39ODW5JxDm-BtBDUzUvNI5EA-cqxvbuQ"
+        user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        
+        if (random() > 0.8):   # 90% True, 10% False
+            user_agent = "phising-bot/1.0"
         self.client.get(
-            "/orders",
-            headers={"Authorization": "Bearer " + token_string, "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"},
+            "/api/orders/orders",
+            headers={"Authorization": "Bearer " + token_string, "User-Agent": user_agent},
         )
-        time.sleep(0.2)
+
+class TestOrders(HttpUser):
+    @task
+    def view_order(self):
+        payload = {
+            "user_id": 1,
+            "client_id": 2,
+            "items": [
+                {
+                    "item_id": 1, 
+                    "quantity": 2,
+                    "unit_value": 200
+                },
+                {
+                    "item_id": 3, 
+                    "quantity": 3, 
+                    "unit_value": 300
+                },
+                {
+                    "item_id": 4, 
+                    "quantity": 4, 
+                    "unit_value": 400
+                }
+            ]
+        }
+
+        headers = {
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzYWxlczEiLCJyb2xlIjoiVSIsImV4cCI6MTc3NTQ0NTA2Mn0.JHTSoNVWDCdL-LrDDldGiGWn6UgEWWl38AZUvS7A9jw",
+            "Content-Type": "application/json"
+        }
+
+        self.client.post(
+            "/api/orders/orders", 
+            json=payload, 
+            headers=headers
+        )

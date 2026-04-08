@@ -17,6 +17,7 @@ from datetime import datetime
 from typing import Optional
 import httpx
 import os
+import time
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -76,7 +77,11 @@ async def get_current_user_from_token(token: str):
     print (f"get_current_user_from_token - token: {token}")
     async with httpx.AsyncClient() as client:
         #logger.info(f"Sending request to {os.getenv('AUTH_SERVICE_URL')}/users/me with token: {token}")
+        start_time = time.perf_counter()
         response = await client.get(f"{os.getenv('AUTH_SERVICE_URL')}/users/me", headers={"Authorization": f"Bearer {token}"})
+        end_time = time.perf_counter()
+        duration_ms = (end_time - start_time) * 1000
+        logger.info(f"Bloque Auth - Execution time: {duration_ms:.2f} milliseconds")
         if response.status_code != 200:
             logger.error(f"Auth service response: {response.status_code} - {response.text}")
             return TokenData(username="", role="")
@@ -96,13 +101,27 @@ async def require_role(current_user, *allowed_roles):
 
 async def log_and_validate(request: Request, token: str, allowed_roles: list):
     #logger.info(f"tokenlogandvalidate: {token}")
+    start_time = time.perf_counter()
     current_user = await get_current_user_from_token(token=token)
+    end_time = time.perf_counter()
+    duration_ms = (end_time - start_time) * 1000
+    logger.info(f"Bloque A - Execution time: {duration_ms:.2f} milliseconds")
     #logger.info(f"Current user: {current_user.username}, role: {current_user.role}")
+
+    start_time = time.perf_counter()
     await log_audit(current_user.username, *get_request_info(request))
+    end_time = time.perf_counter()
+    duration_ms = (end_time - start_time) * 1000
+    logger.info(f"Bloque B - Execution time: {duration_ms:.2f} milliseconds")
+
+    start_time = time.perf_counter()
     if not current_user.username:
         raise HTTPException(status_code=401, detail="Token inválido o acceso denegado")
     if not await require_role(current_user, *allowed_roles):
         raise HTTPException(status_code=403, detail="Acceso denegado")
+    end_time = time.perf_counter()
+    duration_ms = (end_time - start_time) * 1000
+    logger.info(f"Bloque C - Execution time: {duration_ms:.2f} milliseconds")
 
 class OrderCreateItem(BaseModel):
     item_id: int
@@ -126,6 +145,16 @@ async def analyze_request(request: Request, user_id: int):
     headers = {}
     if original_user_agent:
         headers["X-Original-User-Agent"] = original_user_agent
+
+    client_ip = request.client.host
+    x_forwarded_for = request.headers.get("x-forwarded-for")
+
+    if x_forwarded_for:
+        forwarded_for = f"{x_forwarded_for}, {client_ip}"
+    else:
+        forwarded_for = client_ip
+
+    headers['X-Forwarded-For'] = forwarded_for
 
     async with httpx.AsyncClient() as client:
         print(user_id)
@@ -242,10 +271,15 @@ def get_filtered_orders(user_id: Optional[int] = None):
 
 @app.get("/orders")
 async def get_orders(request: Request, token: Annotated[str, Depends(oauth2_scheme)]):
+    start_time = time.perf_counter()
     logger.info(f"Token: {token}")
     await log_and_validate( request, token, allowed_roles=["A", "S"])
     logger.info("Retrieving all orders")
+    end_time = time.perf_counter()
+    duration_ms = (end_time - start_time) * 1000
+    logger.info(f"Block 1 - Execution time: {duration_ms:.2f} milliseconds")
 
+    start_time = time.perf_counter()
     current_user = await get_current_user_from_token(token)
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -254,7 +288,11 @@ async def get_orders(request: Request, token: Annotated[str, Depends(oauth2_sche
     user_id = user_row["user_id"] if user_row else None ### Falta acción si no se puede determinar el user_id
     cursor.close()
     conn.close()
+    end_time = time.perf_counter()
+    duration_ms = (end_time - start_time) * 1000
+    logger.info(f"Block 2 - Execution time: {duration_ms:.2f} milliseconds")
 
+    start_time = time.perf_counter()
     loop = asyncio.get_running_loop()
 
     orders_task = loop.run_in_executor(None, get_filtered_orders)
@@ -268,6 +306,9 @@ async def get_orders(request: Request, token: Annotated[str, Depends(oauth2_sche
         await log_audit(current_user.username, *get_request_info(request), security_status="BLOCKED", security_message=str(analysis))
         return Response(content='{"detail": "Suspicious activity detected, access denied"}', status_code=403, media_type="application/json")
     orders = get_filtered_orders()
+    end_time = time.perf_counter()
+    duration_ms = (end_time - start_time) * 1000
+    logger.info(f"Block 3 - Execution time: {duration_ms:.2f} milliseconds")
 
     return orders
 
