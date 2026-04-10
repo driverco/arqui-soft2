@@ -15,7 +15,7 @@ spec:
       containers:
       - name: auth-service
         image: auth-service:latest  #192.168.5.4:5500/auth-service  
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8010
         env:

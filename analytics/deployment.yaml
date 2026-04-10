@@ -15,7 +15,7 @@ spec:
       containers:
       - name: analytics-service
         image: analytics-service:latest #192.168.5.4:5500/analytics-service  
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8090
         env:

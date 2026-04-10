@@ -203,8 +203,16 @@ async def proxy_orders(request: Request, path: str):
 
             if dispatch_events:
                 await asyncio.gather(*dispatch_events)
-
+            
             response = await write_task
+
+        if(response.status_code == 418): 
+
+            logger.info(f"Sending request to {os.getenv('ADMINKUBES_SERVICE_URL')}/pod-failing")
+            responsePodFailing = await client.get(f"{os.getenv('ADMINKUBES_SERVICE_URL')}/pod-failing", timeout=5.0)
+            responsePodFailing.raise_for_status()
+            #do the call again
+            proxy_orders(request, path)
 
         if response is None:
             logger.error("No response from write pod")

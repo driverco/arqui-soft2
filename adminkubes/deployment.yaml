@@ -16,7 +16,7 @@ spec:
       containers:
       - name: adminkubes-service
         image: adminkubes-service:latest #192.168.5.4:5500/adminkubes-service  
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8030
         env:

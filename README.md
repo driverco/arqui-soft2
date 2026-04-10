@@ -14,6 +14,11 @@ kubectl create rolebinding my-app-view-binding \
   --clusterrole=view \
   --serviceaccount=default:my-app-sa
 
+
+kubectl create rolebinding my-app-admin-binding \
+  --clusterrole=admin \
+  --serviceaccount=default:my-app-sa
+
 kubectl auth can-i list pods --as=system:serviceaccount:default:default
 
 
@@ -56,6 +61,25 @@ kubectl rollout restart deployment adminkubes-service
 kubectl rollout restart deployment apigateway-service
 kubectl rollout restart deployment analytics-service
 
+kubectl delete -n default deployment auth-service
+kubectl delete -n default deployment orders-service
+kubectl delete -n default deployment adminkubes-service
+kubectl delete -n default deployment apigateway-service
+kubectl delete -n default deployment analytics-service
+
+minikube image rm auth-service
+minikube image rm orders-service
+minikube image rm adminkubes-service
+minikube image rm apigateway-service
+minikube image rm analytics-service
+
+docker image rm auth-service
+docker image rm orders-service
+docker image rm adminkubes-service
+docker image rm apigateway-service
+docker image rm analytics-service
+
+
 
 minikube service auth-service --url &
 minikube service orders-service --url &
@@ -71,16 +95,16 @@ admin-service       8030
 apigateway-service  8040
 
 # TODO
-- crear casos de prueba del servicio de orders (locust)
-(Juan) - crear el componente/servicio de analitica de seguridad
-(William) - modificar la presentacion
-- videos de pruebas
-- conclusiones del experimento
 
 # DONE
 - crear el test python(locust) con un caso de prueba
 - crear el APIGATEWAY Y DESDE AHI LOGUIEAR TODAS LAS PETICIONES A LA BASE DE DATOS (dos deplyments o replicas)
 - resolver problemas de permisos del write-pod adminkubes
 - validacion de la idempotencia en las operaciones de escritura de base de datos
-- ampliar el servicio de create order metiendo los items (Juan)
+- ampliar el servicio de create order metiendo los items
+- crear casos de prueba del servicio de orders (locust)
+- crear el componente/servicio de analitica de seguridad
+- modificar la presentacion
+- videos de pruebas
+- conclusiones del experimento
 

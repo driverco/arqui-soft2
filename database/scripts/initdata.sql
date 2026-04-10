@@ -10,13 +10,6 @@ insert into public.users (username, password, status, role) values('sales3', 'pa
 insert into public.users (username, password, status, role) values('supervisor1', 'password333','A', 'S');
 insert into public.users (username, password, status, role) values('admin1', 'password5555','A', 'A');  
 
-insert into public.users (username, password, status, role) values('sales1', 'password','A', 'U');
-insert into public.users (username, password, status, role) values('sales2', 'password123','A', 'U');
-insert into public.users (username, password, status, role) values('sales3', 'password','A', 'U');
-insert into public.users (username, password, status, role) values('supervisor1', 'password333','A', 'S');
-insert into public.users (username, password, status, role) values('admin1', 'password5555','A', 'A');  
-
-
 insert into public.clients(name, docnum) values('Client1', '123456789');
 insert into public.clients(name, docnum) values('Client2', '987654321');    
 insert into public.clients(name, docnum) values('Client3', '456789123');

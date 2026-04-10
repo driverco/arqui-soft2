@@ -15,7 +15,7 @@ spec:
       containers:
       - name: apigateway-service
         image: apigateway-service:latest #192.168.5.4:5500/apigateway-service 
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8040
         env:

@@ -25,6 +25,8 @@ app = FastAPI()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
+isFailing = False
+
 def get_db_connection():
     return psycopg2.connect(os.getenv("DATABASE_URL"), cursor_factory=RealDictCursor)
 
@@ -161,10 +163,20 @@ async def analyze_request(request: Request, user_id: int):
         response = await client.get(f"{os.getenv('ANALYTICS_SERVICE_URL')}/analyze/{user_id}", headers=headers)
         return response.json()
 
+@app.get("/failure")
+async def lets_fail():
+    global isFailing
+    isFailing = True
+
+
+
 @app.post("/orders", response_model=Order)
 async def create_order(request: Request, order: OrderCreate, token: str = Depends(oauth2_scheme)):
     current_user = await get_current_user_from_token(token)
     log_audit(current_user.username, *get_request_info(request))
+
+    if (isFailing):
+        raise HTTPException(status_code=418, detail="Error simulado en la creación de la orden")
 
     conn = get_db_connection()
     conn.autocommit = False

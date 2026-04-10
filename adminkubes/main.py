@@ -123,6 +123,21 @@ async def get_write_pod():
     logger.info(f"Get Experiment write pod: {snapshot['writepod']}")
     return {"writepod": snapshot["writepod"]}
 
+@app.get("/pod-failing")
+async def change_write_pod():
+    v1.delete_namespaced_pod(name=snapshot["writepod"], namespace="default")
+    newWritepod = ""
+    for pod in snapshot["pods"]:
+        #logger.info(f"Pod: {pod['name']} - Status: {pod['status']} - IP: {pod['pod_ip']} - Ready: {pod['ready']}")
+        if pod['status'] == "Running" and pod['name'] != snapshot["writepod"]:
+            newWritepod = pod['name']
+            break
+    logger.info(f"Experiment write pod - Deteccion de falla: {snapshot['writepod']}")
+    snapshot["writepod"] = newWritepod
+
+    logger.info(f"Get Experiment new write pod: {snapshot['writepod']}")
+    return {"writepod": snapshot["writepod"]}
+
 
 
 if __name__ == "__main__":
