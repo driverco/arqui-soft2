@@ -22,20 +22,25 @@ app = FastAPI()
 
 
 
-async def get_current_writepod():
+async def get_orders_snapshot():
     try:
         async with httpx.AsyncClient() as client:
-            logger.info(f"Sending request to {os.getenv('ADMINKUBES_SERVICE_URL')}/write-pod")
-            response = await client.get(f"{os.getenv('ADMINKUBES_SERVICE_URL')}/write-pod", timeout=5.0)
+            logger.info(f"Sending request to {os.getenv('ADMINKUBES_SERVICE_URL')}/snapshot")
+            response = await client.get(f"{os.getenv('ADMINKUBES_SERVICE_URL')}/snapshot", timeout=5.0)
             response.raise_for_status()
-            logger.info(f"Response from {os.getenv('ADMINKUBES_SERVICE_URL')}/write-pod: {response.json().get('writepod', 'none')}")
-            return response.json().get('writepod', 'none')
+            logger.info(f"Response from {os.getenv('ADMINKUBES_SERVICE_URL')}/snapshot: {response.json()}")
+            return response.json()
     except httpx.HTTPError as e:
-        logger.error(f"HTTP error connecting to adminkubes write-pod: {str(e)}")
-        return None
+        logger.error(f"HTTP error connecting to adminkubes snapshot: {str(e)}")
+        return {}
     except Exception as e:
-        logger.error(f"Unexpected error in get_current_writepod: {str(e)}")
-        return None
+        logger.error(f"Unexpected error in get_orders_snapshot: {str(e)}")
+        return {}
+
+
+async def get_current_writepod():
+    snapshot = await get_orders_snapshot()
+    return snapshot.get("writepod")
 
 async def writepod():
     writepod = await get_current_writepod()
@@ -45,19 +50,8 @@ async def writepod():
 
 
 async def get_order_pods():
-    try:
-        async with httpx.AsyncClient() as client:
-            logger.info(f"Sending request to {os.getenv('ADMINKUBES_SERVICE_URL')}/pods")
-            response = await client.get(f"{os.getenv('ADMINKUBES_SERVICE_URL')}/pods", timeout=5.0)
-            response.raise_for_status()
-            logger.info(f"Response from {os.getenv('ADMINKUBES_SERVICE_URL')}/pods: {response.json().get('pods', [])}")
-            return response.json().get('pods', [])
-    except httpx.HTTPError as e:
-        logger.error(f"HTTP error connecting to adminkubes pods: {str(e)}")
-        return []
-    except Exception as e:
-        logger.error(f"Unexpected error in get_order_pods: {str(e)}")
-        return []
+    snapshot = await get_orders_snapshot()
+    return snapshot.get("pods", [])
 
 
 
@@ -125,8 +119,9 @@ async def proxy_adminkubes(request: Request, path: str):
 @app.api_route("/api/orders/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def proxy_orders(request: Request, path: str):
     try:
-        order_pods = await get_order_pods()
-        writepod = await get_current_writepod()
+        snapshot = await get_orders_snapshot()
+        order_pods = snapshot.get("pods", [])
+        writepod = snapshot.get("writepod")
         
         if not order_pods:
             logger.warning("No order pods available")
@@ -151,7 +146,13 @@ async def proxy_orders(request: Request, path: str):
 
         headers['X-Forwarded-For'] = forwarded_for
 
-        async def send_request(client: httpx.AsyncClient, pod_name: str, url: str, started: asyncio.Event):
+        async def send_request(
+            client: httpx.AsyncClient,
+            pod_name: str,
+            url: str,
+            request_params: dict,
+            started: asyncio.Event,
+        ):
             try:
                 started.set()
                 response = await client.request(
@@ -159,7 +160,7 @@ async def proxy_orders(request: Request, path: str):
                     url=url,
                     headers=headers,
                     content=body_content,
-                    params=request.query_params,
+                    params=request_params,
                     timeout=10.0
                 )
                 logger.info(f"Response from pod {pod_name}: {response.status_code}")
@@ -184,11 +185,14 @@ async def proxy_orders(request: Request, path: str):
                         logger.warning(f"Pod {pod_name} has no IP address, skipping")
                         continue
 
-                    url = f"http://{pod_ip}:{os.getenv('ORDERS_PORT')}/{path}"
+                    target_path = "orders-optimized" if path == "orders" else path
+                    request_params = dict(request.query_params)
+                    request_params["isWrite"] = str(writepod == pod_name).lower()
+                    url = f"http://{pod_ip}:{os.getenv('ORDERS_PORT')}/{target_path}"
                     logger.info(f"Proxying request to pod: {pod_name}  url: {url} with method {request.method}")
 
                     started = asyncio.Event()
-                    task = asyncio.create_task(send_request(client, pod_name, url, started))
+                    task = asyncio.create_task(send_request(client, pod_name, url, request_params, started))
                     dispatch_events.append(started.wait())
 
                     if writepod == pod_name:
