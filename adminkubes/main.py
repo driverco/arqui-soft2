@@ -118,6 +118,11 @@ async def get_pods_status():
     return {"pods": snapshot["pods"]}
 
 
+@app.get("/snapshot")
+async def get_snapshot():
+    return snapshot
+
+
 @app.get("/write-pod")
 async def get_write_pod():
     logger.info(f"Get Experiment write pod: {snapshot['writepod']}")
