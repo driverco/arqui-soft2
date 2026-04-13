@@ -52,8 +52,10 @@ async def writepod():
     return podname==writepod
 
 
-async def log_audit(username, method, endpoint, user_agent, ip, pod, security_status="NORMAL", security_message=None):
-    if (await writepod()):
+async def log_audit(username, method, endpoint, user_agent, ip, pod, security_status="NORMAL", security_message=None, is_write: Optional[bool] = None):
+    should_write = is_write if is_write is not None else await writepod()
+
+    if should_write:
         try:
             logger.info(f"Writing audit log: user={username}, method={method}, endpoint={endpoint}, user_agent={user_agent}, ip={ip}, pod={pod}")
             conn = get_db_connection()
@@ -101,7 +103,7 @@ async def require_role(current_user, *allowed_roles):
     return await role_checker()
 
 
-async def log_and_validate(request: Request, token: str, allowed_roles: list):
+async def log_and_validate(request: Request, token: str, allowed_roles: list, is_write: Optional[bool] = None):
     #logger.info(f"tokenlogandvalidate: {token}")
     start_time = time.perf_counter()
     current_user = await get_current_user_from_token(token=token)
@@ -111,7 +113,7 @@ async def log_and_validate(request: Request, token: str, allowed_roles: list):
     #logger.info(f"Current user: {current_user.username}, role: {current_user.role}")
 
     start_time = time.perf_counter()
-    await log_audit(current_user.username, *get_request_info(request))
+    await log_audit(current_user.username, *get_request_info(request), is_write=is_write)
     end_time = time.perf_counter()
     duration_ms = (end_time - start_time) * 1000
     logger.info(f"Bloque B - Execution time: {duration_ms:.2f} milliseconds")
@@ -177,6 +179,85 @@ async def create_order(request: Request, order: OrderCreate, token: str = Depend
 
     if (isFailing):
         raise HTTPException(status_code=418, detail="Error simulado en la creación de la orden")
+
+    conn = get_db_connection()
+    conn.autocommit = False
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("SELECT user_id FROM users WHERE username = %s", (current_user.username,))
+        user_row = cursor.fetchone()
+        if not user_row:
+            raise HTTPException(status_code=400, detail="Usuario autenticado no encontrado")
+
+        authenticated_user_id = user_row["user_id"]
+        target_user_id = order.user_id if order.user_id else authenticated_user_id
+
+        if current_user.role == "U" and target_user_id != authenticated_user_id:
+            raise HTTPException(status_code=403, detail="Los usuarios no pueden crear órdenes para otro usuario")
+
+        cursor.execute(
+            "INSERT INTO orders (user_id, timestamp, client_id) VALUES (%s, NOW(), %s) RETURNING order_id, user_id, timestamp, client_id",
+            (target_user_id, order.client_id)
+        )
+        new_order = cursor.fetchone()
+        order_id = new_order["order_id"]
+
+        if order.items:
+            item_ids = [item.item_id for item in order.items]
+            cursor.execute(
+                "SELECT item_id FROM items WHERE item_id = ANY(%s)",
+                (item_ids,)
+            )
+            existing_items = {row["item_id"] for row in cursor.fetchall()}
+            missing_items = [item_id for item_id in item_ids if item_id not in existing_items]
+            if missing_items:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Los siguientes item_id no existen: {missing_items}"
+                )
+
+            for item in order.items:
+                cursor.execute(
+                    "INSERT INTO orders_items (order_id, item_id, quantity, unit_value) VALUES (%s, %s, %s, %s)",
+                    (order_id, item.item_id, item.quantity, item.unit_value)
+                )
+
+        conn.commit()
+        return new_order
+    except HTTPException:
+        conn.rollback()
+        cursor.close()
+        conn.close()
+        raise
+    except psycopg2.Error as e:
+        conn.rollback()
+        cursor.close()
+        conn.close()
+        logger.error(f"Database error creating order: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al crear la orden")
+    except Exception as e:
+        conn.rollback()
+        cursor.close()
+        conn.close()
+        logger.error(f"Unexpected error creating order: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error inesperado al crear la orden")
+    finally:
+        if not cursor.closed:
+            cursor.close()
+        if conn and not conn.closed:
+            conn.close()
+
+
+@app.post("/orders-optimized", response_model=Order)
+async def create_order_optimized(
+    request: Request,
+    order: OrderCreate,
+    isWrite: bool,
+    token: str = Depends(oauth2_scheme),
+):
+    current_user = await get_current_user_from_token(token)
+    await log_audit(current_user.username, *get_request_info(request), is_write=isWrite)
 
     conn = get_db_connection()
     conn.autocommit = False
@@ -325,6 +406,60 @@ async def get_orders(request: Request, token: Annotated[str, Depends(oauth2_sche
     return orders
 
 
+@app.get("/orders-optimized")
+async def get_orders_optimized(
+    request: Request,
+    isWrite: bool,
+    token: Annotated[str, Depends(oauth2_scheme)],
+):
+    start_time = time.perf_counter()
+    logger.info(f"Token: {token}")
+    await log_and_validate(request, token, allowed_roles=["A", "S"], is_write=isWrite)
+    logger.info("Retrieving all orders")
+    end_time = time.perf_counter()
+    duration_ms = (end_time - start_time) * 1000
+    logger.info(f"Block 1 - Execution time: {duration_ms:.2f} milliseconds")
+
+    start_time = time.perf_counter()
+    current_user = await get_current_user_from_token(token)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id FROM users WHERE username = %s", (current_user.username,))
+    user_row = cursor.fetchone()
+    user_id = user_row["user_id"] if user_row else None
+    cursor.close()
+    conn.close()
+    end_time = time.perf_counter()
+    duration_ms = (end_time - start_time) * 1000
+    logger.info(f"Block 2 - Execution time: {duration_ms:.2f} milliseconds")
+
+    start_time = time.perf_counter()
+    loop = asyncio.get_running_loop()
+
+    orders_task = loop.run_in_executor(None, get_filtered_orders)
+    analytics_task = analyze_request(request, user_id)
+
+    orders, analysis = await asyncio.gather(orders_task, analytics_task)
+
+    if analysis.get("suspicious_activity"):
+        logger.warning(f"Suspicious activity detected for user {current_user.username}: {analysis}")
+        print(f"Suspicious activity detected for user {current_user.username}: {analysis}")
+        await log_audit(
+            current_user.username,
+            *get_request_info(request),
+            security_status="BLOCKED",
+            security_message=str(analysis),
+            is_write=isWrite,
+        )
+        return Response(content='{"detail": "Suspicious activity detected, access denied"}', status_code=403, media_type="application/json")
+    orders = get_filtered_orders()
+    end_time = time.perf_counter()
+    duration_ms = (end_time - start_time) * 1000
+    logger.info(f"Block 3 - Execution time: {duration_ms:.2f} milliseconds")
+
+    return orders
+
+
 @app.get("/orders/{user_id}")
 async def get_ordersbyuser(request: Request, user_id: int, token: str = Depends(oauth2_scheme)):
     await log_and_validate( request, token, allowed_roles=["A", "S", "U"])
@@ -367,4 +502,3 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8010)
-
